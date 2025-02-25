@@ -61,4 +61,5 @@ Dat1 <- mutate(Dat1
                , `WBC`=rnorm(n(), mean = 4.9, sd = .25)
                , `RBC`=rnorm(n(), mean = 4.6, sd = .3)
                , `Hct %`=rnorm(n(), mean = 42, sd = 1) 
+               
                ) #round is function to turn values to whole integers
