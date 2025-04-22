@@ -1,6 +1,6 @@
 #'---
 #' title: "TSCI 5050: Simulating a Data Set"
-#' author: 'Erin Stewart, Author Two ^1^'
+#' author: 'Ciera Price'
 #' abstract: |
 #'  | Provide a summary of objectives, study design, setting, participants,
 #'  | sample size, predictors, outcome, statistical analysis, results,
@@ -20,11 +20,10 @@
 #' ---
 #'
 #+ init, echo=FALSE, message=FALSE, warning=FALSE
-# init ----
-# This part does not show up in your rendered report, only in the script,
-# because we are using regular comments instead of #' comments
-debug <- 0;nrows <- 200;seed <- 22#replicate same random numbers- set.seed 
-prob_missing=c(.99,.01)
+# init ---- 
+# 
+debug <- 0;nrows <-200;seed <-22;
+
 knitr::opts_chunk$set(echo=debug>-1, warning=debug>0, message=debug>0, class.output="scroll-20", attr.output='style="max-height: 150px; overflow-y: auto;"');
 
 library(ggplot2); # visualisation
@@ -37,10 +36,10 @@ library(dplyr); #add dplyr library
 
 options(max.print=500);
 panderOptions('table.split.table',Inf); panderOptions('table.split.cells',Inf);
+prob_missing=c(.99,.01)
 whatisthis <- function(xx){
   list(class=class(xx),info=c(mode=mode(xx),storage.mode=storage.mode(xx)
                               ,typeof=typeof(xx)))};
-
 # Import Data ----
 datafile0 <- "Data/R test data.xlsx"
 Dat0 <- import(datafile0)
@@ -58,35 +57,28 @@ rnorm(nrows, mean=900, sd=250) #Create a single column vector of random values; 
 #Modify Data----
 #Create a new data frame from Dat 0 with row 1 repeated nrows times for all columns
 #Redefine Dat1 by replacing the values in specified columns with random values
-  #Across performs a specific action y given a condition x. 
-    #In this case, if a value is numeric, then replace it with a random value with the given mean and sd
-    #n() represents the number of rows in the current block of data
-    #.x is a placeholder for the column name - this syntax only works within mutate, transmute, and summarize
+#Across performs a specific action y given a condition x. 
+#In this case, if a value is numeric, then replace it with a random value with the given mean and sd
+#n() represents the number of rows in the current block of data
+#.x is a placeholder for the column name - this syntax only works within mutate, transmute, and summarize
 
 Dat1 <- Dat0[rep(1,nrows),] %>% 
-        mutate(across(where(is.numeric),~rnorm(n(), mean=.x, sd=1+.x/12))
-        , ID= sprintf("EX-%04d",sample(1:1000,n())) # Zero pad to 4 places with prefix 'EX-'
-        ,`Specimen ID`= sprintf("%03d-%03d-%04d-%d"#`These quotes are needed for variable names that include a space`
-              ,sample(1:100,n(), replace = TRUE)
-              ,sample(1:100,n(),replace = TRUE)
-              ,sample(1:1000,n(),replace = TRUE)
-              ,sample(1:9,n(),replace = TRUE))
-        , `Breast Cancer`=sample(0:1,n(),replace = TRUE)
-        , `Lung Cancer`=sample(0:1,n(),replace = TRUE)
-        , `Other Cancer`=sample(0:1,n(),replace = TRUE)
-        , `Not Cancer` =sample(0:1,n(),replace = TRUE)
-        , `Free Response`=replicate(n(),paste0(sample(c(letters, LETTERS, 0:9, ' '),sample(5:20,1),replace=TRUE),collapse=''))
-        , #IHG= sample(c(I, II, III, IV),n(),replace = TRUE) 
-        , PIN = seq_len(n())
-        , `CD4 ABS`=round(rnorm(n(), mean=900, sd=250))
-        , `CD8 ABS`=round(rnorm(n(), mean=500, sd=20))
-        , `CD4/8 Ratio`=(`CD4 ABS`/`CD8 ABS`)
-        , WBC=rnorm(n(), mean=4.9, sd=.26)
-        , RBC=rnorm(n(), mean=8.7, sd=.24)
-        , across(everything(),~ifelse(sample(1:0,n(),replace=TRUE,prob = prob_missing),.x, NA))
-        , Date=as.Date(Date,"%m/%d/%Y")-sample(0:2,n(),replace=TRUE) 
-        , 
-        )
+  mutate(across(where(is.numeric),~rnorm(n(), mean=.x, sd=1+.x/12))
+         , ID= sprintf("EX-%04d",sample(1:1000,n())) # Zero pad to 4 places with prefix 'EX-'
+         ,`Specimen ID`= sprintf("%03d-%03d-%04d-%d"#`These quotes are needed for variable names that include a space`
+                                 ,sample(1:100,n(), replace = TRUE)
+                                 ,sample(1:100,n(),replace = TRUE)
+                                 ,sample(1:1000,n(),replace = TRUE)
+                                 ,sample(1:9,n(),replace = TRUE))
+         , PIN = seq_len(n())
+         , `CD4 ABS`=round(rnorm(n(), mean=900, sd=250))
+         , `CD8 ABS`=round(rnorm(n(), mean=500, sd=20))
+         , `CD4/8 Ratio`=(`CD4 ABS`/`CD8 ABS`)
+         , WBC=rnorm(n(), mean=4.9, sd=.26)
+         , RBC=rnorm(n(), mean=8.7, sd=.24)
+         , across(everything(),~ifelse(sample(1:0,n(),replace=TRUE,prob = prob_missing),.x, NA))
+         , Date=as.Date(Date,"%m/%d/%Y")-sample(0:2,n(),replace=TRUE) 
+  )
 
 #sprintf("name = %s, age = %d, percentile = %f %%", "Ciera", 30, 98.5)
 # s = string, d = integer, f = fraction
@@ -101,6 +93,3 @@ SummaryDat1 <-summarize(group_by(Dat1,Date),`CD4 ABS`=mean(`CD4 ABS`),`CD8 ABS`=
 
 #Write Data ----
 export(Dat1,"Data/Simulated Data.xlsx")
-#....scatter plot, visualize:
-select(Dat1,!any_of(c("ID","Specimen ID","PIN","VISIT","Notes")))%>% ggpairs
-

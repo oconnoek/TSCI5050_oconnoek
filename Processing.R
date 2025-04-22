@@ -1,6 +1,6 @@
 #'---
 #' title: "TSCI 5050: Processing a Data Set"
-#' author: 'Ciera Price'
+#' author: 'Erin Stewart'
 #' abstract: |
 #'  | Provide a summary of objectives, study design, setting, participants,
 #'  | sample size, predictors, outcome, statistical analysis, results,
@@ -33,7 +33,7 @@ library(pander); # format tables
 #library(printr); # set limit on number of lines printed
 library(broom); # allows to give clean dataset
 library(dplyr); #add dplyr library
-
+library(DataExplorer);
 options(max.print=500);
 panderOptions('table.split.table',Inf); panderOptions('table.split.cells',Inf);
 prob_missing=c(.99,.01)
@@ -42,8 +42,12 @@ datafile1<-"Data/Simulate.xlx"
 simdat <- import(datafile1) %>% mutate(train=sample(c(TRUE,FALSE),n(),replace = TRUE))
 #simdat <-mutate(simdat,train=sample(c(TRUE,FALSE),n(),replace = TRUE))
 
+#to omit missing or na data, and to count unique values per column
+sapply(Dat1,function(xx){length(unique(na.omit(xx)))})
+
 select(Dat1,!any_of(c("ID","Specimen ID","PIN","VISIT","Notes"))) %>% ggpairs
 #slice()
 #....slice to cut data for training then testing, for modeling
 ##Read in the data Simulated Data
 c()
+
