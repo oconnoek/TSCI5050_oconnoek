@@ -1,3 +1,5 @@
+rm(list = ls())
+
 library(pROC)
 library(glmnet)
 library(dplyr)
@@ -226,11 +228,11 @@ ggplot(prob_df, aes(x = Cluster, y = Probability, fill = Cluster)) +
 
 X <- dta[,c(9:15,17:31)]
 
-fil <- rowSums(is.na(X))==0&!is.na(elim_washback.x)
+fil <- rowSums(is.na(X))==0&!is.na(consolidated_result)
 
 X2 <- X[fil,]
 
-y <- as.numeric(elim_washback.x[fil]=='Graduate')
+y <- as.numeric(consolidated_result[fil]=='Graduate')
 
 
 
@@ -238,7 +240,10 @@ nrow(X2)*.6
 
 set.seed(267)
 
-a <- c(1:nrow(X2))%in%sample(c(1:nrow(X2)))[1:2383]
+train_indices <- sample(seq_len(nrow(X2)), size = floor(0.6 * nrow(X2)))
+a <- seq_len(nrow(X2)) %in% train_indices
+
+#a <- c(1:nrow(X2))%in%sample(c(1:nrow(X2)))[1:2383]
 
 X2.a <- as.matrix(X2[a,])
 
@@ -275,10 +280,7 @@ ROC <- roc(y.b,x)
 plot(ROC)
 # 
 auc(ROC)
-# 
-# 
-# 
-# 
+# # 
 # 
 x <- as.numeric(as.matrix(X2.a)%*%as.matrix(coef(best_model)[-1]))
 # 
@@ -289,3 +291,210 @@ plot(ROC)
 auc(ROC)
 # 
 
+################ Random forest ###############
+
+# library(randomForest)
+# rf_model <- randomForest(x = X2.a, y = as.factor(y.a), ntree = 500)
+# rf_probs <- predict(rf_model, newdata = X2.b, type = "prob")[,2]
+# roc(y.b, rf_probs)
+
+
+############ LASSO ################
+
+library(glmnet)
+fit <- cv.glmnet(X2.a, y.a, family="binomial", alpha=1)
+best_lambda <- fit$lambda.min
+y_prob <- as.numeric(predict(fit, s=best_lambda, newx=as.matrix(X2.b), type="response"))
+roc(y.b, y_prob)
+
+##############################################
+
+############### Mean AUC over k-folds ############### BEST AUC SO FAR
+
+library(glmnet)
+library(pROC)
+
+set.seed(123)  # for reproducibility
+
+k <- 5
+folds <- sample(rep(1:k, length.out = nrow(X2)))
+
+auc_values <- numeric(k)
+
+for (i in 1:k) {
+  # Split data
+  train_idx <- which(folds != i)
+  test_idx  <- which(folds == i)
+  
+  X_train <- as.matrix(X2[train_idx, ])
+  y_train <- y[train_idx]
+  
+  X_test  <- as.matrix(X2[test_idx, ])
+  y_test  <- y[test_idx]
+  
+  # Fit LASSO model
+  fit <- cv.glmnet(X_train, y_train, family = "binomial", alpha = 1)
+  y_prob <- as.numeric(predict(fit, s = fit$lambda.min, newx = X_test, type = "response"))
+  
+  # Compute AUC
+  roc_obj <- roc(y_test, y_prob)
+  auc_values[i] <- auc(roc_obj)
+}
+
+# Report mean AUC
+mean_auc <- mean(auc_values)
+print(mean_auc)
+
+##########################################
+################## 5 fold, 3 models per fold, LR, LASSO and Random Forest####
+library(glmnet)
+library(pROC)
+library(randomForest)
+
+set.seed(123)  # for reproducibility
+
+# Assume X2 = predictor data, y = binary outcome (0/1)
+# Prepare 5-fold CV
+k <- 5
+folds <- sample(rep(1:k, length.out = nrow(X2)))
+
+# Store AUCs
+auc_logistic <- numeric(k)
+auc_lasso <- numeric(k)
+auc_rf <- numeric(k)
+auc_ensemble <- numeric(k)
+
+for (i in 1:k) {
+  cat("Fold", i, "\n")
+  
+  # Split data
+  train_idx <- which(folds != i)
+  test_idx  <- which(folds == i)
+  
+  X_train <- X2[train_idx, ]
+  y_train <- y[train_idx]
+  
+  X_test  <- X2[test_idx, ]
+  y_test  <- y[test_idx]
+  
+  # Logistic regression
+  log_model <- glm(y_train ~ ., data = data.frame(y_train, X_train), family = "binomial")
+  log_probs <- predict(log_model, newdata = X_test, type = "response")
+  auc_logistic[i] <- auc(roc(y_test, log_probs))
+  
+  # LASSO
+  lasso_model <- cv.glmnet(as.matrix(X_train), y_train, family = "binomial", alpha = 1)
+  lasso_probs <- as.numeric(predict(lasso_model, s = lasso_model$lambda.min, newx = as.matrix(X_test), type = "response"))
+  auc_lasso[i] <- auc(roc(y_test, lasso_probs))
+  
+  # Random Forest
+  rf_model <- randomForest(x = X_train, y = as.factor(y_train), ntree = 500)
+  rf_probs <- predict(rf_model, newdata = X_test, type = "prob")[, 2]
+  auc_rf[i] <- auc(roc(y_test, rf_probs))
+  
+  # Ensemble
+  ensemble_probs <- (log_probs + lasso_probs + rf_probs) / 3
+  auc_ensemble[i] <- auc(roc(y_test, ensemble_probs))
+}
+
+# Report average AUCs
+cat("\nMean AUCs over", k, "folds:\n")
+cat(sprintf("Logistic:  %.4f\n", mean(auc_logistic)))
+cat(sprintf("LASSO:     %.4f\n", mean(auc_lasso)))
+cat(sprintf("RF:        %.4f\n", mean(auc_rf)))
+cat(sprintf("Ensemble:  %.4f\n", mean(auc_ensemble)))
+
+############ stratified 5-fold cross validation, ROC plots########### *Worse AUCs**
+# 
+# library(glmnet)
+# library(pROC)
+# library(randomForest)
+# library(caret)
+# library(ggplot2)
+# 
+# set.seed(123)
+# 
+# # Your predictors (X2) and binary outcome (y)
+# 
+# # Create stratified folds
+# folds <- createFolds(y, k = 5, list = TRUE, returnTrain = FALSE)
+# 
+# # Initialize vectors to store AUCs
+# auc_logistic <- numeric(5)
+# auc_lasso <- numeric(5)
+# auc_rf <- numeric(5)
+# auc_ensemble <- numeric(5)
+# 
+# roc_data <- list()
+# 
+# for (i in 1:5) {
+#   cat("Fold", i, "\n")
+#   
+#   test_idx <- folds[[i]]
+#   train_idx <- setdiff(1:nrow(X2), test_idx)
+#   
+#   X_train <- X2[train_idx, ]
+#   y_train <- y[train_idx]
+#   X_test  <- X2[test_idx, ]
+#   y_test  <- y[test_idx]
+#   
+#   # Logistic Regression
+#   log_model <- glm(y_train ~ ., data = data.frame(y_train, X_train), family = "binomial")
+#   log_probs <- predict(log_model, newdata = X_test, type = "response")
+#   roc_log <- roc(y_test, log_probs)
+#   auc_logistic[i] <- auc(roc_log)
+#   
+#   # LASSO
+#   lasso_model <- cv.glmnet(as.matrix(X_train), y_train, family = "binomial", alpha = 1)
+#   lasso_probs <- as.numeric(predict(lasso_model, s = lasso_model$lambda.min, newx = as.matrix(X_test), type = "response"))
+#   roc_lasso <- roc(y_test, lasso_probs)
+#   auc_lasso[i] <- auc(roc_lasso)
+#   
+#   # Random Forest
+#   rf_model <- randomForest(x = X_train, y = as.factor(y_train), ntree = 500)
+#   rf_probs <- predict(rf_model, newdata = X_test, type = "prob")[, 2]
+#   roc_rf <- roc(y_test, rf_probs)
+#   auc_rf[i] <- auc(roc_rf)
+#   
+#   # Ensemble (average probs)
+#   ensemble_probs <- (log_probs + lasso_probs + rf_probs) / 3
+#   roc_ensemble <- roc(y_test, ensemble_probs)
+#   auc_ensemble[i] <- auc(roc_ensemble)
+#   
+#   # Collect ROC curve points in long format
+#   roc_data[[i]] <- rbind(
+#     data.frame(FPR = 1 - roc_log$specificities, TPR = roc_log$sensitivities, Model = "Logistic", Fold = paste0("Fold ", i)),
+#     data.frame(FPR = 1 - roc_lasso$specificities, TPR = roc_lasso$sensitivities, Model = "LASSO", Fold = paste0("Fold ", i)),
+#     data.frame(FPR = 1 - roc_rf$specificities, TPR = roc_rf$sensitivities, Model = "RandomForest", Fold = paste0("Fold ", i)),
+#     data.frame(FPR = 1 - roc_ensemble$specificities, TPR = roc_ensemble$sensitivities, Model = "Ensemble", Fold = paste0("Fold ", i))
+#   )
+# }
+# 
+# # Combine ROC data for plotting
+# roc_df <- do.call(rbind, roc_data)
+# 
+# # Plot ROC curves by fold and model
+# ggplot(roc_df, aes(x = FPR, y = TPR, color = Model)) +
+#   geom_line(size = 1) +
+#   facet_wrap(~ Fold) +
+#   labs(title = "ROC Curves by Fold", x = "1 - Specificity (FPR)", y = "Sensitivity (TPR)") +
+#   theme_minimal() +
+#   theme(legend.position = "bottom")
+# 
+# # Save AUC results to CSV
+# auc_df <- data.frame(
+#   Fold = 1:5,
+#   Logistic = auc_logistic,
+#   LASSO = auc_lasso,
+#   RandomForest = auc_rf,
+#   Ensemble = auc_ensemble
+# )
+# write.csv(auc_df, "auc_results.csv", row.names = FALSE)
+# 
+# # Print mean AUCs
+# cat("\nMean AUCs over 5 stratified folds:\n")
+# cat(sprintf("Logistic:  %.4f\n", mean(auc_logistic)))
+# cat(sprintf("LASSO:     %.4f\n", mean(auc_lasso)))
+# cat(sprintf("RandomForest: %.4f\n", mean(auc_rf)))
+# cat(sprintf("Ensemble:  %.4f\n", mean(auc_ensemble)))
+# 

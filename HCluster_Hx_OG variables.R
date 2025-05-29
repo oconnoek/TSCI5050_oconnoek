@@ -1,3 +1,5 @@
+rm(list = ls())
+
 library(pROC)
 library(glmnet)
 library(dplyr)
